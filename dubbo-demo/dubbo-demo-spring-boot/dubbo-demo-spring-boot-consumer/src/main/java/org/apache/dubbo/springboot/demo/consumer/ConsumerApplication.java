@@ -29,7 +29,7 @@ import org.springframework.stereotype.Service;
 @Service
 @EnableDubbo
 public class ConsumerApplication {
-
+    // 业务代码外功而已，开始修炼内功吧 看源码了 每天最少1小时 愿持之以恒
     @DubboReference
     private DemoService demoService;
 

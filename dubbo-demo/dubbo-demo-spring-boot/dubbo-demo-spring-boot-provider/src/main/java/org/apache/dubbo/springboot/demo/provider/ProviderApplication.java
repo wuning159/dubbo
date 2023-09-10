@@ -27,6 +27,7 @@ import java.util.concurrent.CountDownLatch;
 @SpringBootApplication
 @EnableDubbo(scanBasePackages = {"org.apache.dubbo.springboot.demo.provider"})
 public class ProviderApplication {
+    // 业务代码外功而已，开始修炼内功吧 看源码了 每天最少1小时 愿持之以恒
     public static void main(String[] args) throws Exception {
         SpringApplication.run(ProviderApplication.class, args);
         System.out.println("dubbo service started");
