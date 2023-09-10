@@ -26,8 +26,12 @@
     <dubbo:application name="demo-consumer"/>
 
     <!-- use multicast registry center to discover service -->
-    <dubbo:registry address="multicast://224.5.6.7:1234"/>
+    <!--    <dubbo:registry address="multicast://224.5.6.7:1234"/>-->
 
+
+    <!-- 业务代码外功而已，开始修炼内功吧 看源码了 每天最少1小时 愿持之以恒   -->
+    <!--    https://zookeeper.apache.org/  zookeeper 官网  下载本地启动 修改注册地址-->
+    <dubbo:registry address="zookeeper://127.0.0.1:2181"/>
     <!-- generate proxy for the remote service, then demoService can be used in the same way as the
     local regular interface -->
     <dubbo:reference id="demoService" check="false" interface="com.alibaba.dubbo.demo.DemoService"/>
