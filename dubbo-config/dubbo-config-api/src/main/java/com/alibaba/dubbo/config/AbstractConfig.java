@@ -41,6 +41,9 @@ import java.util.regex.Pattern;
  * @export
  */
 public abstract class AbstractConfig implements Serializable {
+    /**
+     * AbstractConfig 除了ArgumentConfig外所有配置类的父类  抽象配置类
+     */
 
     protected static final Logger logger = LoggerFactory.getLogger(AbstractConfig.class);
     private static final long serialVersionUID = 4267533505537413570L;
