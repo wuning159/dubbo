@@ -24,8 +24,7 @@ XML 配置方式
 
 总结： 所有的配置项最终都会转换为Dubbo URL表示，并由服务提供方生成，再经注册中心传递给消费方。
 
-
-![img.png](assets/img.png)
+![img.png](/img.png)
 
 
 3. 源码解析

@@ -43,10 +43,12 @@ import java.util.regex.Pattern;
 public abstract class AbstractConfig implements Serializable {
     /**
      * AbstractConfig 除了ArgumentConfig外所有配置类的父类  抽象配置类
+     * 主要提供配置解析与校验相关的工具方法
      */
 
     protected static final Logger logger = LoggerFactory.getLogger(AbstractConfig.class);
     private static final long serialVersionUID = 4267533505537413570L;
+    // ========== 属性值的格式校验，参见本类的 `#checkXXX` 方法 BEGIN ==========
     private static final int MAX_LENGTH = 200;
 
     private static final int MAX_PATH_LENGTH = 200;
@@ -62,6 +64,8 @@ public abstract class AbstractConfig implements Serializable {
     private static final Pattern PATTERN_NAME_HAS_SYMBOL = Pattern.compile("[:*,\\s/\\-._0-9a-zA-Z]+");
 
     private static final Pattern PATTERN_KEY = Pattern.compile("[*,\\-._0-9a-zA-Z]+");
+
+    // ========== 属性值的格式校验，参见本类的 `#checkXXX` 方法 END ==========
     private static final Map<String, String> legacyProperties = new HashMap<String, String>();
     private static final String[] SUFFIXES = new String[]{"Config", "Bean"};
 
@@ -79,6 +83,13 @@ public abstract class AbstractConfig implements Serializable {
         Runtime.getRuntime().addShutdownHook(DubboShutdownHook.getDubboShutdownHook());
     }
 
+    /**
+     *
+     *
+     * 配置对象的编号，适用于除Api之外的三种配置方式，标记一个对象，可用于对象之间的引用
+     * @author wuning
+     * @date  2023/9/12 11:45
+     **/
     protected String id;
 
     private static String convertLegacyValue(String key, String value) {
