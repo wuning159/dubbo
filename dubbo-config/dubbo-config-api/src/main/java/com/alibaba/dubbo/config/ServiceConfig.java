@@ -705,6 +705,7 @@ public class ServiceConfig<T> extends AbstractServiceConfig {
         if (provider == null) {
             provider = new ProviderConfig();
         }
+        //todo 创建一个ProviderConfig 对象 这个值从哪里来的  也就是说哪里设置的他 <dubbo:provider />
         appendProperties(provider);
     }
 
