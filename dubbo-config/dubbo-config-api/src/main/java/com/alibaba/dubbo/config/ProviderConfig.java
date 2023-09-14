@@ -30,6 +30,9 @@ import java.util.Arrays;
 /**
  * ProviderConfig
  *
+ * 实现 AbstractServiceConfig ，服务提供者缺省值配置。
+ *
+ * 同时该标签为 <dubbo:service> 和 <dubbo:protocol> 标签的缺省值设置
  * @export
  * @see com.alibaba.dubbo.config.ProtocolConfig
  * @see com.alibaba.dubbo.config.ServiceConfig

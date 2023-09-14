@@ -25,6 +25,7 @@ import java.util.Map;
 /**
  * AbstractMethodConfig
  *
+ *  方法级配置的抽象类  地址：https://cn.dubbo.apache.org/zh-cn/overview/mannual/java-sdk/reference-manual/config/properties/
  * @export
  */
 public abstract class AbstractMethodConfig extends AbstractConfig {

@@ -33,6 +33,7 @@ import java.util.Map;
 /**
  * ProtocolConfig
  *
+ * 服务提供者协议配置   地址:https://dubbo.apache.org/zh-cn/overview/mannual/java-sdk/reference-manual/config/properties/#protocol
  * @export
  */
 public class ProtocolConfig extends AbstractConfig {

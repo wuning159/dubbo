@@ -65,6 +65,8 @@ import static com.alibaba.dubbo.common.utils.NetUtils.isInvalidPort;
 
 /**
  * ServiceConfig
+ * <p>
+ * 服务提供者暴露服务配置类。
  *
  * @export
  */
@@ -194,7 +196,11 @@ public class ServiceConfig<T> extends AbstractServiceConfig {
         return unexported;
     }
 
+    /**
+     * 服务暴露
+     */
     public synchronized void export() {
+        // 当export 或者delay 为 null 时，从 provider 中获取
         if (provider != null) {
             if (export == null) {
                 export = provider.getExport();
@@ -203,10 +209,19 @@ public class ServiceConfig<T> extends AbstractServiceConfig {
                 delay = provider.getDelay();
             }
         }
+        // 如果 export 为 false，则不暴露服务
         if (export != null && !export) {
             return;
         }
-
+        // 延迟暴露   地址：https://dubbo.apache.org/zh-cn/overview/mannual/java-sdk/advanced-features-and-usage/service/delay-publish/
+        // Dubbo 2.6.5之前的版本 服务在Spring初始化完成前就可暴露，以后得版本需要等待Spring初始化完成后才能暴露服务
+        // 之前的版本会引发一些问题，比如：线程死锁
+        //在 Spring 解析到 <dubbo:service /> 时，就已经向外暴露了服务，而 Spring 还在接着初始化其它 Bean。如果这时有请求进来，
+        // 并且服务的实现类里有调用 applicationContext.getBean() 的用法。
+        // 请求线程的 applicationContext.getBean() 调用，先同步 singletonObjects 判断 Bean 是否存在，
+        // 不存在就同步 beanDefinitionMap 进行初始化，并再次同步 singletonObjects 写入 Bean 实例缓存。
+        // 而 Spring 初始化线程，因不需要判断 Bean 的存在，直接同步 beanDefinitionMap 进行初始化，并同步 singletonObjects 写入 Bean 实例缓存。
+        // 反向所造成线程死锁
         if (delay != null && delay > 0) {
             delayExportExecutor.schedule(new Runnable() {
                 @Override
@@ -215,6 +230,7 @@ public class ServiceConfig<T> extends AbstractServiceConfig {
                 }
             }, delay, TimeUnit.MILLISECONDS);
         } else {
+            // 立即暴露服务
             doExport();
         }
     }

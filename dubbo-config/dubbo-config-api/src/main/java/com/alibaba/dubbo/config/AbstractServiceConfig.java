@@ -25,7 +25,7 @@ import java.util.List;
 
 /**
  * AbstractServiceConfig
- *
+ *实现 AbstractInterfaceConfig ，抽象服务配置类。
  * @export
  */
 public abstract class AbstractServiceConfig extends AbstractInterfaceConfig {
@@ -41,9 +41,11 @@ public abstract class AbstractServiceConfig extends AbstractInterfaceConfig {
     // whether the service is deprecated
     protected Boolean deprecated;
 
+    //延迟注册服务时间(毫秒) ，设为-1时，表示延迟到Spring容器初始化完成时暴露服务
     // delay service exporting
     protected Integer delay;
 
+    // 是否暴露服务，如果为false，不会暴露
     // whether to export the service
     protected Boolean export;
 
