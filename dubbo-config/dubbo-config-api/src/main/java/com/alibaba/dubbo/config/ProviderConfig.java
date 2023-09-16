@@ -36,7 +36,14 @@ import java.util.Arrays;
  * @export
  * @see com.alibaba.dubbo.config.ProtocolConfig
  * @see com.alibaba.dubbo.config.ServiceConfig
+ *
+ *
+ *
+ *
+ * 文档地址：https://cn.dubbo.apache.org/zh-cn/overview/mannual/java-sdk/reference-manual/config/properties/#provider
+ *  对应的配置类： org.apache.dubbo.config.ProviderConfig。同时该标签为 <dubbo:service> 和 <dubbo:protocol> 标签的缺省值设置
  */
+
 public class ProviderConfig extends AbstractServiceConfig {
 
     private static final long serialVersionUID = 6913423882496634749L;

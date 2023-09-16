@@ -22,20 +22,27 @@ import com.alibaba.dubbo.config.support.Parameter;
 import java.io.Serializable;
 
 /**
- * @export
- * 方法参数配置
+ * @export 方法参数配置
+ * <dubbo:method name="findXxx" timeout="3000" retries="2">
+ * <dubbo:argument index="0" callback="true" />
+ * </dubbo:method>
+ * 文档：https://cn.dubbo.apache.org/zh-cn/overview/mannual/java-sdk/reference-manual/config/properties/#argument
  */
 public class ArgumentConfig implements Serializable {
 
     private static final long serialVersionUID = -2165482463925213595L;
 
     //argument: index -1 represents not set
+    //参数索引：-1表示未设置
     private Integer index = -1;
 
     //argument type
+    //参数类型  与index二选一  通过参数类型查找参数的index
     private String type;
 
     //callback interface
+    //回调接口 参数是否为callback接口，如果为callback，服务提供方将生成反向代理，可以从服务提供方反向调用消费方，通常用于事件推送
+    // 此处想到 rabbitmq rocketmq 消费者 提供者 互相确认的底层逻辑肯定也有这个参数 但是估计是强制的
     private Boolean callback;
 
     public ArgumentConfig() {

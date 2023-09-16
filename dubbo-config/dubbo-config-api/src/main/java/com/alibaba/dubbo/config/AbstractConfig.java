@@ -109,10 +109,14 @@ public abstract class AbstractConfig implements Serializable {
      * @param config 配置对象
      */
     protected static void appendProperties(AbstractConfig config) {
+
         if (config == null) {
             return;
         }
+        System.out.println("config Class= " + config.getClass());
+        //前缀
         String prefix = "dubbo." + getTagName(config.getClass()) + ".";
+        //反射获取所有的方法名
         Method[] methods = config.getClass().getMethods();
         for (Method method : methods) {
             try {
@@ -131,6 +135,7 @@ public abstract class AbstractConfig implements Serializable {
                     }
                     if (value == null || value.length() == 0) {
                         String pn = prefix + property;
+                        //判断系统环境变量中是否有对应的key
                         value = System.getProperty(pn);
                         if (!StringUtils.isBlank(value)) {
                             logger.info("Use System Property " + pn + " to config dubbo");
@@ -166,6 +171,7 @@ public abstract class AbstractConfig implements Serializable {
                         }
                     }
                     if (value != null && value.length() > 0) {
+                        //执行set方法 设置value到对应的属性
                         method.invoke(config, convertPrimitive(method.getParameterTypes()[0], value));
                     }
                 }
@@ -222,6 +228,9 @@ public abstract class AbstractConfig implements Serializable {
                     Parameter parameter = method.getAnnotation(Parameter.class);
                     if (method.getReturnType() == Object.class || parameter != null && parameter.excluded()) {
                         continue;
+                    }
+                    if (method.getName().equals("getQosPort")) {
+                        System.out.println("getQosPort");
                     }
                     //此处判断是get还是is开头的方法，如果是get开头的方法，则从第三个字符开始截取，否则从第二个字符开始截取
                     int i = name.startsWith("get") ? 3 : 2;

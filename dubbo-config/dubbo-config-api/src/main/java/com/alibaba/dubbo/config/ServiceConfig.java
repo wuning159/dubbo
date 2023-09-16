@@ -236,6 +236,7 @@ public class ServiceConfig<T> extends AbstractServiceConfig {
     }
 
     protected synchronized void doExport() {
+        //检查是否可以暴露，若可以，标记已经暴露
         if (unexported) {
             throw new IllegalStateException("Already unexported!");
         }
@@ -243,10 +244,13 @@ public class ServiceConfig<T> extends AbstractServiceConfig {
             return;
         }
         exported = true;
+        // 校验接口名非空
         if (interfaceName == null || interfaceName.length() == 0) {
             throw new IllegalStateException("<dubbo:service interface=\"\" /> interface not allow null!");
         }
+        // 拼接属性配置(环境变量+properties属性)到 ProviderConfig 对象
         checkDefault();
+        // 从 ProviderConfig 对象中，读取 application、module、registries、monitor、protocols 配置对象。
         if (provider != null) {
             if (application == null) {
                 application = provider.getApplication();
@@ -264,6 +268,7 @@ public class ServiceConfig<T> extends AbstractServiceConfig {
                 protocols = provider.getProtocols();
             }
         }
+        //  从 ModuleConfig 对象中，读取 registries、monitor 配置对象。
         if (module != null) {
             if (registries == null) {
                 registries = module.getRegistries();
@@ -272,6 +277,7 @@ public class ServiceConfig<T> extends AbstractServiceConfig {
                 monitor = module.getMonitor();
             }
         }
+        // 从 ApplicationConfig 对象中，读取 registries、monitor 配置对象。
         if (application != null) {
             if (registries == null) {
                 registries = application.getRegistries();
@@ -280,11 +286,13 @@ public class ServiceConfig<T> extends AbstractServiceConfig {
                 monitor = application.getMonitor();
             }
         }
+        // 泛化接口的实现
         if (ref instanceof GenericService) {
             interfaceClass = GenericService.class;
             if (StringUtils.isEmpty(generic)) {
                 generic = Boolean.TRUE.toString();
             }
+       // 普通接口的实现
         } else {
             try {
                 interfaceClass = Class.forName(interfaceName, true, Thread.currentThread()
@@ -292,10 +300,13 @@ public class ServiceConfig<T> extends AbstractServiceConfig {
             } catch (ClassNotFoundException e) {
                 throw new IllegalStateException(e.getMessage(), e);
             }
+            // 校验接口和方法
             checkInterfaceAndMethods(interfaceClass, methods);
+            // 校验指向的service对象
             checkRef();
             generic = Boolean.FALSE.toString();
         }
+        // 处理服务接口客户端本地代理( `local` )相关。实际目前已经废弃，使用 `stub` 属性，参见 `AbstractInterfaceConfig#setLocal` 方法。
         if (local != null) {
             if ("true".equals(local)) {
                 local = interfaceName + "Local";
@@ -310,6 +321,7 @@ public class ServiceConfig<T> extends AbstractServiceConfig {
                 throw new IllegalStateException("The local implementation class " + localClass.getName() + " not implement interface " + interfaceName);
             }
         }
+        // 处理服务接口客户端本地代理( `stub` )相关
         if (stub != null) {
             if ("true".equals(stub)) {
                 stub = interfaceName + "Stub";
@@ -324,15 +336,22 @@ public class ServiceConfig<T> extends AbstractServiceConfig {
                 throw new IllegalStateException("The stub implementation class " + stubClass.getName() + " not implement interface " + interfaceName);
             }
         }
+        // 校验ApplicationConfig 配置。
         checkApplication();
+        // 校验RegistryConfig 配置。
         checkRegistry();
+        // 校验ProtocolConfig 配置数组。
         checkProtocol();
+        // 读取环境变量和 properties 配置到 ServiceConfig 对象。
         appendProperties(this);
+        // 校验 Stub 和 Mock 相关的配置。
         checkStub(interfaceClass);
         checkMock(interfaceClass);
+        // 服务路径为空，则使用接口名作为服务路径。
         if (path == null || path.length() == 0) {
             path = interfaceName;
         }
+        // 暴露服务
         doExportUrls();
         CodecSupport.addProviderSupportedSerialization(getUniqueServiceName(), getExportedUrls());
         ProviderModel providerModel = new ProviderModel(getUniqueServiceName(), this, ref);
@@ -378,39 +397,52 @@ public class ServiceConfig<T> extends AbstractServiceConfig {
             doExportUrlsFor1Protocol(protocolConfig, registryURLs);
         }
     }
-
+    // 盲猜是根据协议暴露服务
     private void doExportUrlsFor1Protocol(ProtocolConfig protocolConfig, List<URL> registryURLs) {
+        // 获取协议名
         String name = protocolConfig.getName();
         if (name == null || name.length() == 0) {
+            // 默认使用 dubbo 协议
             name = "dubbo";
         }
-
+        // 将 `side`，`dubbo`，`timestamp`，`pid` 参数，添加到 `map` 集合中。
         Map<String, String> map = new HashMap<String, String>();
         map.put(Constants.SIDE_KEY, Constants.PROVIDER_SIDE);
         map.put(Constants.DUBBO_VERSION_KEY, Version.getProtocolVersion());
         map.put(Constants.TIMESTAMP_KEY, String.valueOf(System.currentTimeMillis()));
+        System.out.println("ConfigUtils.getPid():"+ConfigUtils.getPid());
         if (ConfigUtils.getPid() > 0) {
             map.put(Constants.PID_KEY, String.valueOf(ConfigUtils.getPid()));
         }
+        // 根据application配置，添加`application`参数到map集合中
         appendParameters(map, application);
+        // 根据module配置，添加`module`参数到map集合中
         appendParameters(map, module);
+        // 根据provider配置，添加`provider`参数到map集合中
         appendParameters(map, provider, Constants.DEFAULT_KEY);
+        // 根据协议配置，添加`protocol`参数到map集合中
         appendParameters(map, protocolConfig);
+        // 根据ServiceConfig配置，添加`methods`参数到map集合中
         appendParameters(map, this);
+        // 将 MethodConfig 对象数组，添加到 `map` 集合中。
         if (methods != null && !methods.isEmpty()) {
             for (MethodConfig method : methods) {
+                // 将 MethodConfig 对象，添加到 `map` 集合中。
                 appendParameters(map, method, method.getName());
                 String retryKey = method.getName() + ".retry";
+                // 当 配置了 `MethodConfig.retry = false` 时，强制禁用重试
                 if (map.containsKey(retryKey)) {
                     String retryValue = map.remove(retryKey);
                     if ("false".equals(retryValue)) {
+                        //远程服务调用重试次数，不包括第一次调用，不需要重试请设为0 就是此处禁用重试
                         map.put(method.getName() + ".retries", "0");
                     }
                 }
+                // 将 ArgumentConfig 对象数组，添加到 `map` 集合中。
                 List<ArgumentConfig> arguments = method.getArguments();
                 if (arguments != null && !arguments.isEmpty()) {
                     for (ArgumentConfig argument : arguments) {
-                        // convert argument type
+                        // convert argument type  指定类型
                         if (argument.getType() != null && argument.getType().length() > 0) {
                             Method[] methods = interfaceClass.getMethods();
                             // visit all methods
@@ -418,9 +450,11 @@ public class ServiceConfig<T> extends AbstractServiceConfig {
                                 for (int i = 0; i < methods.length; i++) {
                                     String methodName = methods[i].getName();
                                     // target the method, and get its signature
-                                    if (methodName.equals(method.getName())) {
+                                    if (methodName.equals(method.getName())) { // 找到指定方法
+                                        // 获取方法参数类型
                                         Class<?>[] argtypes = methods[i].getParameterTypes();
                                         // one callback in the method
+                                        // todo 这里不太懂，需要xml 添加argument  并尝试debug  2023年9月16日 18:32:39 跑完步再尝试
                                         if (argument.getIndex() != -1) {
                                             if (argtypes[argument.getIndex()].getName().equals(argument.getType())) {
                                                 appendParameters(map, argument, method.getName() + "." + argument.getIndex());
@@ -718,6 +752,7 @@ public class ServiceConfig<T> extends AbstractServiceConfig {
     }
 
     private void checkDefault() {
+        //初始化provider
         if (provider == null) {
             provider = new ProviderConfig();
         }
