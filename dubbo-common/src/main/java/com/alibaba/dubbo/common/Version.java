@@ -121,6 +121,7 @@ public final class Version {
         }
     }
 
+    // 获取版本号
     public static String getVersion(Class<?> cls, String defaultVersion) {
         try {
             // find version info from MANIFEST.MF first
@@ -134,6 +135,7 @@ public final class Version {
                 if (codeSource == null) {
                     logger.info("No codeSource for class " + cls.getName() + " when getVersion, use default version " + defaultVersion);
                 } else {
+                    //从 jar 包命名中可能带的版本号作为结果
                     String file = codeSource.getLocation().getFile();
                     if (file != null && file.length() > 0 && file.endsWith(".jar")) {
                         file = file.substring(0, file.length() - 4);
@@ -157,6 +159,7 @@ public final class Version {
                     }
                 }
             }
+            // 不存在版本号，返回默认版本号
             // return default version if no version info is found
             return version == null || version.length() == 0 ? defaultVersion : version;
         } catch (Throwable e) {

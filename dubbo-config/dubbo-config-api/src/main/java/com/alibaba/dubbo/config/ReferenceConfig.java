@@ -61,7 +61,7 @@ import static com.alibaba.dubbo.common.utils.NetUtils.isInvalidLocalHost;
 
 /**
  * ReferenceConfig
- *
+ * 服务消费者引用服务配置类。
  * @export
  */
 public class ReferenceConfig<T> extends AbstractReferenceConfig {
@@ -160,10 +160,41 @@ public class ReferenceConfig<T> extends AbstractReferenceConfig {
         return urls;
     }
 
+    /**
+     * // 当前应用配置
+     * ApplicationConfig application = new ApplicationConfig();
+     * application.setName("yyy");
+     * <p>
+     * // 连接注册中心配置
+     * RegistryConfig registry = new RegistryConfig();
+     * registry.setAddress("10.20.130.230:9090");
+     * registry.setUsername("aaa");
+     * registry.setPassword("bbb");
+     * <p>
+     * // 注意：ReferenceConfig为重对象，内部封装了与注册中心的连接，以及与服务提供方的连接
+     * <p>
+     * // 引用远程服务
+     * ReferenceConfig<XxxService> reference = new ReferenceConfig<XxxService>(); // 此实例很重，封装了与注册中心的连接以及与提供者的连接，请自行缓存，否则可能造成内存和连接泄漏
+     * reference.setApplication(application);
+     * reference.setRegistry(registry); // 多个注册中心可以用setRegistries()
+     * reference.setInterface(XxxService.class);
+     * reference.setVersion("1.0.0");
+     * <p>
+     * // 和本地bean一样使用xxxService
+     * XxxService xxxService = reference.get(); // 注意：此代理对象内部封装了所有通讯细节，对象较重，请缓存复用
+     * @return
+     */
+
+    /**
+     *  上面代码可以看出，ReferenceConfig 在组装应用配置、注册中心配置后，设置具体Interface   这里的get 就是在获取某个具体的方法
+     * @return
+     */
     public synchronized T get() {
+        // 已销毁，不可获得
         if (destroyed) {
             throw new IllegalStateException("Already destroyed!");
         }
+        // 初始化
         if (ref == null) {
             init();
         }
@@ -188,33 +219,62 @@ public class ReferenceConfig<T> extends AbstractReferenceConfig {
     }
 
     private void init() {
+        // 已经初始化，不再初始化
         if (initialized) {
             return;
         }
         initialized = true;
+        // 判断方法名是否为空，为空则抛出异常
         if (interfaceName == null || interfaceName.length() == 0) {
             throw new IllegalStateException("<dubbo:reference interface=\"\" /> interface not allow null!");
         }
         // get consumer's global configuration
+        // 初始化消费者，并且读取环境变量和properties 配置到consumer
         checkDefault();
+        // 读取环境变量和properties 配置到ReferenceConfig
         appendProperties(this);
+        // 泛化接口
         if (getGeneric() == null && getConsumer() != null) {
+            // 从消费者中获取泛化接口
             setGeneric(getConsumer().getGeneric());
         }
+        // 再次检查是否为通用接口
         if (ProtocolUtils.isGeneric(getGeneric())) {
+            // 如果是直接赋值
             interfaceClass = GenericService.class;
         } else {
+            // 普通接口实现
             try {
+                // 如果不是，反射获取接口名
                 interfaceClass = Class.forName(interfaceName, true, Thread.currentThread()
                         .getContextClassLoader());
             } catch (ClassNotFoundException e) {
                 throw new IllegalStateException(e.getMessage(), e);
             }
+            // 再次校验接口和方法
             checkInterfaceAndMethods(interfaceClass, methods);
         }
+        /**
+         * 在开发及测试环境下，经常需要绕过注册中心，只测试指定服务提供者，这时候可能需要点对点直连，点对点直连方式，
+         * 将以服务接口为单位，忽略注册中心的提供者列表，A 接口配置点对点，不影响 B 接口从注册中心获取列表。
+         * 有三种方式：
+         * xml配置 如果是线上需求需要点对点，可在 <dubbo:reference> 中配置 url 指向提供者，将绕过注册中心，多个地址用分号隔开，配置如下：
+         * <dubbo:reference id="xxxService" interface="com.alibaba.xxx.XxxService" url="dubbo://localhost:20890" />
+         * -D 参数配置
+         *  在 JVM 启动参数中加入-D参数映射服务地址，如：java -Dcom.alibaba.xxx.XxxService=dubbo://localhost:20890
+         *  key 为服务名，value 为服务提供者 url，此配置优先级最高，1.0.15 及以上版本支持
+         * 文件映射配置
+         * 映射文件 xxx.properties 中加入配置，其中 key 为服务名，value 为服务提供者 URL
+         * com.alibaba.xxx.XxxService=dubbo://localhost:20890
+         * 1.0.15 及以上版本支持，2.0 以上版本自动加载 ${user.home}/dubbo-resolve.properties文件，不需要配置
+         */
+        //   直连提供者
+        // 【直连提供者】第一优先级，通过 -D 参数指定 ，例如 java -Dcom.alibaba.xxx.XxxService=dubbo://localhost:20890
         String resolve = System.getProperty(interfaceName);
         String resolveFile = null;
+        // 【直连提供者】第二优先级，通过文件映射，例如 com.alibaba.xxx.XxxService=dubbo://localhost:20890
         if (resolve == null || resolve.length() == 0) {
+            // 默认先加载，`${user.home}/dubbo-resolve.properties` 文件 ，无需配置
             resolveFile = System.getProperty("dubbo.resolve.file");
             if (resolveFile == null || resolveFile.length() == 0) {
                 File userResolveFile = new File(new File(System.getProperty("user.home")), "dubbo-resolve.properties");
@@ -222,6 +282,7 @@ public class ReferenceConfig<T> extends AbstractReferenceConfig {
                     resolveFile = userResolveFile.getAbsolutePath();
                 }
             }
+            // 如果存在resolveFile,则进行文件读取加载 从文件中获取
             if (resolveFile != null && resolveFile.length() > 0) {
                 Properties properties = new Properties();
                 FileInputStream fis = null;
@@ -240,6 +301,7 @@ public class ReferenceConfig<T> extends AbstractReferenceConfig {
                 resolve = properties.getProperty(interfaceName);
             }
         }
+        // 设置直连提供者的url
         if (resolve != null && resolve.length() > 0) {
             url = resolve;
             if (logger.isWarnEnabled()) {

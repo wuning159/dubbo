@@ -397,7 +397,15 @@ public class ServiceConfig<T> extends AbstractServiceConfig {
             doExportUrlsFor1Protocol(protocolConfig, registryURLs);
         }
     }
-    // 盲猜是根据协议暴露服务
+
+    /**
+     * 暴露服务
+     * @param protocolConfig
+     * @param registryURLs
+     *
+     * 总的流程就是  把各类配置信息组合到map中，然后Map转Url 对象，然后配置规则，然后暴露服务 protocol.export
+     */
+
     private void doExportUrlsFor1Protocol(ProtocolConfig protocolConfig, List<URL> registryURLs) {
         // 获取协议名
         String name = protocolConfig.getName();
@@ -486,7 +494,7 @@ public class ServiceConfig<T> extends AbstractServiceConfig {
                 }
             } // end of methods for
         }
-
+        // generic、methods、revision
         if (ProtocolUtils.isGeneric(generic)) {
             map.put(Constants.GENERIC_KEY, generic);
             map.put(Constants.METHODS_KEY, Constants.ANY_VALUE);
@@ -504,13 +512,16 @@ public class ServiceConfig<T> extends AbstractServiceConfig {
                 map.put(Constants.METHODS_KEY, StringUtils.join(new HashSet<String>(Arrays.asList(methods)), ","));
             }
         }
+        // token
         if (!ConfigUtils.isEmpty(token)) {
+            // map 中添加 `token` 属性。
             if (ConfigUtils.isDefault(token)) {
                 map.put(Constants.TOKEN_KEY, UUID.randomUUID().toString());
             } else {
                 map.put(Constants.TOKEN_KEY, token);
             }
         }
+        // 协议为 injvm 时，不注册，不通知
         if (Constants.LOCAL_PROTOCOL.equals(protocolConfig.getName())) {
             protocolConfig.setRegister(false);
             map.put("notify", "false");
@@ -520,9 +531,10 @@ public class ServiceConfig<T> extends AbstractServiceConfig {
         if ((contextPath == null || contextPath.length() == 0) && provider != null) {
             contextPath = provider.getContextpath();
         }
-
+        // protocolConfig中读取 host、port
         String host = this.findConfigedHosts(protocolConfig, registryURLs, map);
         Integer port = this.findConfigedPorts(protocolConfig, name, map);
+        // 创建 Dubbo URL 对象
         URL url = new URL(name, host, port, (contextPath == null || contextPath.length() == 0 ? "" : contextPath + "/") + path, map);
 
         if (ExtensionLoader.getExtensionLoader(ConfiguratorFactory.class)
@@ -530,9 +542,10 @@ public class ServiceConfig<T> extends AbstractServiceConfig {
             url = ExtensionLoader.getExtensionLoader(ConfiguratorFactory.class)
                     .getExtension(url.getProtocol()).getConfigurator(url).configure(url);
         }
-
+        // 配置规则
         String scope = url.getParameter(Constants.SCOPE_KEY);
         // don't export when none is configured
+        // 暴露服务逻辑
         if (!Constants.SCOPE_NONE.toString().equalsIgnoreCase(scope)) {
 
             // export to local if the config is not remote (export to remote only when config is remote)
