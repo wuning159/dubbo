@@ -62,6 +62,7 @@ import static com.alibaba.dubbo.common.utils.NetUtils.isInvalidLocalHost;
 /**
  * ReferenceConfig
  * 服务消费者引用服务配置类。
+ *
  * @export
  */
 public class ReferenceConfig<T> extends AbstractReferenceConfig {
@@ -186,7 +187,8 @@ public class ReferenceConfig<T> extends AbstractReferenceConfig {
      */
 
     /**
-     *  上面代码可以看出，ReferenceConfig 在组装应用配置、注册中心配置后，设置具体Interface   这里的get 就是在获取某个具体的方法
+     * 上面代码可以看出，ReferenceConfig 在组装应用配置、注册中心配置后，设置具体Interface   这里的get 就是在获取某个具体的方法
+     *
      * @return
      */
     public synchronized T get() {
@@ -235,7 +237,7 @@ public class ReferenceConfig<T> extends AbstractReferenceConfig {
         appendProperties(this);
         // 泛化接口
         if (getGeneric() == null && getConsumer() != null) {
-            // 从消费者中获取泛化接口
+            // 从消费者中获取泛化接口设置到ReferenceConfig
             setGeneric(getConsumer().getGeneric());
         }
         // 再次检查是否为通用接口
@@ -312,6 +314,7 @@ public class ReferenceConfig<T> extends AbstractReferenceConfig {
                 }
             }
         }
+        // 从 ConsumerConfig 对象中，读取 application、module、registries、monitor 配置对象。
         if (consumer != null) {
             if (application == null) {
                 application = consumer.getApplication();
@@ -326,6 +329,7 @@ public class ReferenceConfig<T> extends AbstractReferenceConfig {
                 monitor = consumer.getMonitor();
             }
         }
+        // 从 ModuleConfig 对象中，读取 registries、monitor 配置对象
         if (module != null) {
             if (registries == null) {
                 registries = module.getRegistries();
@@ -334,6 +338,7 @@ public class ReferenceConfig<T> extends AbstractReferenceConfig {
                 monitor = module.getMonitor();
             }
         }
+        // 从 ApplicationConfig 对象中，读取 registries、monitor 配置对象
         if (application != null) {
             if (registries == null) {
                 registries = application.getRegistries();
@@ -342,23 +347,29 @@ public class ReferenceConfig<T> extends AbstractReferenceConfig {
                 monitor = application.getMonitor();
             }
         }
+        // 校验 ApplicationConfig 配置
         checkApplication();
+        // 校验 Stub 和 Mock 相关的配置
         checkStub(interfaceClass);
         checkMock(interfaceClass);
+        // 创建参数集合 map ，用于下面创建 Dubbo URL 的 parameters 属性
         Map<String, String> map = new HashMap<String, String>();
         Map<Object, Object> attributes = new HashMap<Object, Object>();
+        // 将 `side`，`dubbo`，`timestamp`，`pid` 参数，添加到 `map` 集合中。
         map.put(Constants.SIDE_KEY, Constants.CONSUMER_SIDE);
         map.put(Constants.DUBBO_VERSION_KEY, Version.getProtocolVersion());
         map.put(Constants.TIMESTAMP_KEY, String.valueOf(System.currentTimeMillis()));
         if (ConfigUtils.getPid() > 0) {
             map.put(Constants.PID_KEY, String.valueOf(ConfigUtils.getPid()));
         }
+        //不是泛化接口
         if (!isGeneric()) {
+            //  获取版本号，配置到map中
             String revision = Version.getVersion(interfaceClass, version);
             if (revision != null && revision.length() > 0) {
                 map.put("revision", revision);
             }
-
+            //  获取接口方法列表，并添加到map中
             String[] methods = Wrapper.getWrapper(interfaceClass).getMethodNames();
             if (methods.length == 0) {
                 logger.warn("NO method found in service interface " + interfaceClass.getName());
@@ -367,7 +378,9 @@ public class ReferenceConfig<T> extends AbstractReferenceConfig {
                 map.put("methods", StringUtils.join(new HashSet<String>(Arrays.asList(methods)), ","));
             }
         }
+        // 配置接口名
         map.put(Constants.INTERFACE_KEY, interfaceName);
+        // 将 ApplicationConfig、ConsumerConfig、ReferenceConfig 等对象的字段信息，添加到 `map` 集合中。
         appendParameters(map, application);
         appendParameters(map, module);
         appendParameters(map, consumer, Constants.DEFAULT_KEY);
@@ -375,7 +388,9 @@ public class ReferenceConfig<T> extends AbstractReferenceConfig {
         String prefix = StringUtils.getServiceKey(map);
         if (methods != null && !methods.isEmpty()) {
             for (MethodConfig method : methods) {
+                // 将 MethodConfig ，添加到 `map` 集合中。
                 appendParameters(map, method, method.getName());
+                // 当 配置了 `MethodConfig.retry = false` 时，强制禁用重试
                 String retryKey = method.getName() + ".retry";
                 if (map.containsKey(retryKey)) {
                     String retryValue = map.remove(retryKey);
@@ -383,21 +398,28 @@ public class ReferenceConfig<T> extends AbstractReferenceConfig {
                         map.put(method.getName() + ".retries", "0");
                     }
                 }
+                // 将带有 @Parameter(attribute = true) 配置对象的属性，添加到参数集合。
+                // 参见《事件通知》http://dubbo.apache.org/zh-cn/docs/user/demos/events-notify.html
                 appendAttributes(attributes, method, prefix + "." + method.getName());
+                // 检查属性集合中的事件通知方法是否正确。若正确，进行转换。
                 checkAndConvertImplicitConfig(method, map, attributes);
             }
         }
-
+        // 以系统环境变量( DUBBO_IP_TO_REGISTRY ) 作为服务注册地址
         String hostToRegistry = ConfigUtils.getSystemProperty(Constants.DUBBO_IP_TO_REGISTRY);
         if (hostToRegistry == null || hostToRegistry.length() == 0) {
+            // 不存在 `DUBBO_IP_TO_REGISTRY` 环境变量，则获取本地主机地址
             hostToRegistry = NetUtils.getLocalHost();
         } else if (isInvalidLocalHost(hostToRegistry)) {
             throw new IllegalArgumentException("Specified invalid registry ip from property:" + Constants.DUBBO_IP_TO_REGISTRY + ", value:" + hostToRegistry);
         }
+        // 设置注册ip地址
         map.put(Constants.REGISTER_IP_KEY, hostToRegistry);
 
+        // 添加到 StaticContext 进行缓存
         //attributes are stored by system context.
         StaticContext.getSystemContext().putAll(attributes);
+        // 引用服务
         ref = createProxy(map);
         ConsumerModel consumerModel = new ConsumerModel(getUniqueServiceName(), this, ref, interfaceClass.getMethods());
         ApplicationModel.initConsumerModel(getUniqueServiceName(), consumerModel);
@@ -405,6 +427,7 @@ public class ReferenceConfig<T> extends AbstractReferenceConfig {
 
     @SuppressWarnings({"unchecked", "rawtypes", "deprecation"})
     private T createProxy(Map<String, String> map) {
+        // map 转 URL
         URL tmpUrl = new URL("temp", "localhost", 0, map);
         final boolean isJvmRefer;
         if (isInjvm() == null) {
