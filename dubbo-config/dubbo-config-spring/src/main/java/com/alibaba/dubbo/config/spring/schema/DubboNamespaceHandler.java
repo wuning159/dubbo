@@ -34,6 +34,7 @@ import org.springframework.beans.factory.xml.NamespaceHandlerSupport;
  *
  * @export
  */
+//实现 NamespaceHandler 接口， NamespaceHandler Dubbo 的XML Namespace的处理器
 public class DubboNamespaceHandler extends NamespaceHandlerSupport {
 
     static {
@@ -42,6 +43,7 @@ public class DubboNamespaceHandler extends NamespaceHandlerSupport {
 
     @Override
     public void init() {
+        // 定义了每个<xsd:element/> 对应的org.springframework.beans.factory.xml.BeanDefinitionParser
         registerBeanDefinitionParser("application", new DubboBeanDefinitionParser(ApplicationConfig.class, true));
         registerBeanDefinitionParser("module", new DubboBeanDefinitionParser(ModuleConfig.class, true));
         registerBeanDefinitionParser("registry", new DubboBeanDefinitionParser(RegistryConfig.class, true));
@@ -49,6 +51,7 @@ public class DubboNamespaceHandler extends NamespaceHandlerSupport {
         registerBeanDefinitionParser("provider", new DubboBeanDefinitionParser(ProviderConfig.class, true));
         registerBeanDefinitionParser("consumer", new DubboBeanDefinitionParser(ConsumerConfig.class, true));
         registerBeanDefinitionParser("protocol", new DubboBeanDefinitionParser(ProtocolConfig.class, true));
+        // serviceBean 和 referenceBean 与其他的不同，解析完具体配置后，需要调用它们对应的方法进行初始化
         registerBeanDefinitionParser("service", new DubboBeanDefinitionParser(ServiceBean.class, true));
         registerBeanDefinitionParser("reference", new DubboBeanDefinitionParser(ReferenceBean.class, false));
         registerBeanDefinitionParser("annotation", new AnnotationBeanDefinitionParser());

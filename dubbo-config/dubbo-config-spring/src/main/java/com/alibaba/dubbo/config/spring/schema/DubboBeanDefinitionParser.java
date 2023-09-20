@@ -56,14 +56,19 @@ import java.util.regex.Pattern;
 
 /**
  * AbstractBeanDefinitionParser
- *
+ *  DubboBean定义解析器
  * @export
  */
+
 public class DubboBeanDefinitionParser implements BeanDefinitionParser {
 
     private static final Logger logger = LoggerFactory.getLogger(DubboBeanDefinitionParser.class);
     private static final Pattern GROUP_AND_VERION = Pattern.compile("^[\\-.0-9_a-zA-Z]+(\\:[\\-.0-9_a-zA-Z]+)?$");
+
+    //Bean 对象类
     private final Class<?> beanClass;
+    // 是否需要 Bean 的 id 属性 。是否需要在Bean对象的编号（id）不存在时，自动生成编号。无需被其他应用引用的配置对象，无需自动生成编号。
+    // 例如有<dubbo:reference />
     private final boolean required;
 
     public DubboBeanDefinitionParser(Class<?> beanClass, boolean required) {
@@ -71,13 +76,27 @@ public class DubboBeanDefinitionParser implements BeanDefinitionParser {
         this.required = required;
     }
 
+    /**
+     * 解析 XML 元素，生成 BeanDefinition 对象
+     * @param element
+     * @param parserContext
+     * @param beanClass
+     * @param required
+     * @return
+     */
     @SuppressWarnings("unchecked")
     private static BeanDefinition parse(Element element, ParserContext parserContext, Class<?> beanClass, boolean required) {
+        // 创建 RootBeanDefinition 对象 设置lazyInit为false
         RootBeanDefinition beanDefinition = new RootBeanDefinition();
         beanDefinition.setBeanClass(beanClass);
+        //这里有一个点，就是应用缺省是延迟初始化的，只有引用被注入到其他bean,或者被getBean()获取，才会初始化。如果需要饥饿加载，
+        // 也就是说没有人引用也立即生成动态代理，可以配置<dubbo:reference ... init="true" />
         beanDefinition.setLazyInit(false);
+        // 开始处理Bean的编号
+        // 解析配置对象的id ，若不存在，则进行生成
         String id = element.getAttribute("id");
         if ((id == null || id.length() == 0) && required) {
+            // 生成id。 不同的配置对象，会存在不同 ，这里生成的id 规则为 name>特殊规则（处理ProtocolConfig）>interface>class
             String generatedBeanName = element.getAttribute("name");
             if (generatedBeanName == null || generatedBeanName.length() == 0) {
                 if (ProtocolConfig.class.equals(beanClass)) {
@@ -90,6 +109,7 @@ public class DubboBeanDefinitionParser implements BeanDefinitionParser {
                 generatedBeanName = beanClass.getName();
             }
             id = generatedBeanName;
+            // 若 id 已存在，通过自增序列，解决重复。
             int counter = 2;
             while (parserContext.getRegistry().containsBeanDefinition(id)) {
                 id = generatedBeanName + (counter++);
@@ -99,10 +119,15 @@ public class DubboBeanDefinitionParser implements BeanDefinitionParser {
             if (parserContext.getRegistry().containsBeanDefinition(id)) {
                 throw new IllegalStateException("Duplicate spring bean id " + id);
             }
+            // 添加到 Spring 的注册表
             parserContext.getRegistry().registerBeanDefinition(id, beanDefinition);
+            // 设置 Bean 的id属性值
             beanDefinition.getPropertyValues().addPropertyValue("id", id);
         }
+        // 处理 `<dubbo:protocol` /> 的特殊情况
         if (ProtocolConfig.class.equals(beanClass)) {
+            // 例如：<dubbo:service interface="com.alibaba.dubbo.demo.DemoService" protocol="dubbo" ref="demoService"/>
+            // 例如：<dubbo:protocol id="dubbo" name="dubbo" port="20880" />
             for (String name : parserContext.getRegistry().getBeanDefinitionNames()) {
                 BeanDefinition definition = parserContext.getRegistry().getBeanDefinition(name);
                 PropertyValue property = definition.getPropertyValues().getPropertyValue("protocol");

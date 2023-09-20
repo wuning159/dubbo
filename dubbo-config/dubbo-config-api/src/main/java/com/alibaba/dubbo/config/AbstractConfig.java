@@ -70,6 +70,7 @@ public abstract class AbstractConfig implements Serializable {
     private static final String[] SUFFIXES = new String[]{"Config", "Bean"};
 
     static {
+        // 新老版本的 properties 的 key 映射
         legacyProperties.put("dubbo.protocol.name", "dubbo.service.protocol");
         legacyProperties.put("dubbo.protocol.host", "dubbo.service.server.host");
         legacyProperties.put("dubbo.protocol.port", "dubbo.service.server.port");
@@ -91,6 +92,13 @@ public abstract class AbstractConfig implements Serializable {
      **/
     protected String id;
 
+    /**
+     * 将键对应的值转换成目标的值
+     * 因为新老配置可能有一些差异，通过该方法进行转换
+     * @param key
+     * @param value
+     * @return
+     */
     private static String convertLegacyValue(String key, String value) {
         if (value != null && value.length() > 0) {
             if ("dubbo.service.max.retry.providers".equals(key)) {
@@ -101,9 +109,10 @@ public abstract class AbstractConfig implements Serializable {
         }
         return value;
     }
+
     /**
      * 读取环境变量和 properties 配置到配置对象
-     *
+     * <p>
      * 参见：<a href="https://dubbo.gitbooks.io/dubbo-user-book/configuration/properties.html">属性配置</a>
      *
      * @param config 配置对象
@@ -114,34 +123,56 @@ public abstract class AbstractConfig implements Serializable {
             return;
         }
         System.out.println("config Class= " + config.getClass());
-        //前缀
+        //获取配置项后缀 例如，ServiceConfig 后缀为 Config；ServiceBean 后缀为 Bean。
         String prefix = "dubbo." + getTagName(config.getClass()) + ".";
-        //反射获取所有的方法名
+
+        /**
+         * 反射获取配置类的所有方法名，用于下面通过反射获取配置项的属性名，再用属性名去读取启动参数变量和properties配置到配置对象
+         */
         Method[] methods = config.getClass().getMethods();
         for (Method method : methods) {
             try {
                 String name = method.getName();
-                if (name.length() > 3 && name.startsWith("set") && Modifier.isPublic(method.getModifiers())
-                        && method.getParameterTypes().length == 1 && isPrimitive(method.getParameterTypes()[0])) {
+                // public&&setting方法&&唯一参数是基本数据类型
+                //其中唯一参数为基本类型，决定了一个配置对象无法设置另外一个配置对象数组为属性，即没有多注册中心，多协议等情况。
+                // 例如，ServiceConfig 无法通过属性配置设置多个 ProtocolConfig 对象。
+                if (name.length() > 3 && name.startsWith("set") && Modifier.isPublic(method.getModifiers()) // 方法是public的，且方法名以set开头
+                        && method.getParameterTypes().length == 1 && isPrimitive(method.getParameterTypes()[0])) { // 方法只有一个参数，且参数是基本数据类型
+                    // 获取属性名，例如ApplicationConfig#setName()，则获取到的属性名为name
                     String property = StringUtils.camelToSplitName(name.substring(3, 4).toLowerCase() + name.substring(4), ".");
-
+                    /**
+                     * 读取是有一定地覆盖策略的，优先级为：启动参数变量 > XML 配置 > properties 配置。
+                     * -D 例如：-Ddubbo.protocol.port=20880
+                     * dubbo.xml  例如：<dubbo:protocol port="20880" />
+                     * dubbo.properties 例如：dubbo.protocol.port=20880
+                     *  JVM 启动-D参数优先，这样可以使用户在部署和启动时，进行参数重写，比如在启动时，通过 -Ddubbo.protocol.port=9090 重写协议的端口。
+                     *  XML 次之，如果在 XML 中有配置，则 dubbo.properties 中的相应配置项无效。
+                     *  properties 配置优先级最低，相当于缺省值，只有 XML 没有配置时，properties 配置文件的相应配置项才能生效。通常用于共享公共配置，比如应用名。
+                     */
+                    // 启动参数读取 两种情况：一种是带有 `Config#id` 的配置，例如：dubbo.application.demo-provider.name  id为demo-provider
+                    // 一种是不带 `Config#id` 的配置，例如：`dubbo.application.name` 。这里的 `Config#id` 是指配置类的 `id` 属性。
+                    //【启动参数变量】优先从带有 `Config#id` 的配置中获取，例如：dubbo.application.demo-provider.name  id为demo-provider
                     String value = null;
                     if (config.getId() != null && config.getId().length() > 0) {
-                        String pn = prefix + config.getId() + "." + property;
+                        System.out.println("config.getId()= " + config.getId());
+                        String pn = prefix + config.getId() + "." + property; // 带有`Config#id` 的配置，例如：dubbo.application.demo-provider.name
                         value = System.getProperty(pn);
                         if (!StringUtils.isBlank(value)) {
                             logger.info("Use System Property " + pn + " to config dubbo");
                         }
                     }
+                    // 【启动参数变量】获取不到，其次不带 `Config#id` 的配置中获取，例如：`dubbo.application.name` 。
                     if (value == null || value.length() == 0) {
-                        String pn = prefix + property;
+                        String pn = prefix + property;// 不带 `Config#id`
                         //判断系统环境变量中是否有对应的key
                         value = System.getProperty(pn);
                         if (!StringUtils.isBlank(value)) {
                             logger.info("Use System Property " + pn + " to config dubbo");
                         }
                     }
+                    // 【XML 配置】 因为xml的优先级高于properties，所以直接用get方法，判断配置对象是否已经拥有该配置项的值
                     if (value == null || value.length() == 0) {
+                        // 覆盖优先级为：启动参数变量 > XML 配置 > properties 配置，因此需要使用 getter 判断 XML 是否已经设置
                         Method getter;
                         try {
                             getter = config.getClass().getMethod("get" + name.substring(3));
@@ -153,6 +184,7 @@ public abstract class AbstractConfig implements Serializable {
                             }
                         }
                         if (getter != null) {
+                            // 如果没有设置，则从properties中读取
                             if (getter.invoke(config) == null) {
                                 if (config.getId() != null && config.getId().length() > 0) {
                                     value = ConfigUtils.getProperty(prefix + config.getId() + "." + property);
@@ -171,16 +203,24 @@ public abstract class AbstractConfig implements Serializable {
                         }
                     }
                     if (value != null && value.length() > 0) {
-                        //执行set方法 设置value到对应的属性
+                        //执行set方法 设置value到对应的属性  获取到值，进行反射设置
                         method.invoke(config, convertPrimitive(method.getParameterTypes()[0], value));
                     }
                 }
             } catch (Exception e) {
+                // 不抛出异常，仅打印日志
                 logger.error(e.getMessage(), e);
             }
         }
     }
 
+    /**
+     * private static final String[] SUFFIXES = new String[]{"Config", "Bean"};
+     * 例如 com.alibaba.dubbo.config.ProviderConfig  会被解析成 provider
+     *
+     * @param cls
+     * @return
+     */
     private static String getTagName(Class<?> cls) {
         String tag = cls.getSimpleName();
         for (String suffix : SUFFIXES) {
