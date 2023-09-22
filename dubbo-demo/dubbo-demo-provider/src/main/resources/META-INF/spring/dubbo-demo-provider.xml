@@ -32,7 +32,9 @@
     <!--    https://zookeeper.apache.org/  zookeeper 官网  下载本地启动 修改注册地址-->
     <dubbo:registry address="zookeeper://127.0.0.1:2181"/>
     <!-- use dubbo protocol to export service on port 20880 -->
-    <dubbo:protocol name="dubbo" port="20880"/>
+    <dubbo:protocol name="dubbo" port="20880">
+        <dubbo:parameter key="http://10.20.160.198/wiki/display/dubbo/napoli.queue.name" value="xxx"/>
+    </dubbo:protocol>
 
     <!-- service implementation, as same as regular local bean -->
     <bean id="demoService" class="com.alibaba.dubbo.demo.provider.DemoServiceImpl"/>
