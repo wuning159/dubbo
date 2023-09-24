@@ -390,6 +390,8 @@ public final class StringUtils {
         StringBuilder buf = null;
         for (int i = 0; i < camelName.length(); i++) {
             char ch = camelName.charAt(i);
+            // 前面一个方法名的后缀开头已经转换成小写了，这里为什么还要判断大写 除非命名的的时候，后缀的首字母后面是大写的
+            // 这里再做一次判断，确保得到的方法名是小写的
             if (ch >= 'A' && ch <= 'Z') {
                 if (buf == null) {
                     buf = new StringBuilder();
