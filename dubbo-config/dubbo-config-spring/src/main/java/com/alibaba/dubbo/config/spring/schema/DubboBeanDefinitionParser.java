@@ -219,10 +219,16 @@ public class DubboBeanDefinitionParser implements BeanDefinitionParser {
                     // 解析 `<dubbo:parameter />` 标签的内容
                     parameters = parseParameters(element.getChildNodes(), beanDefinition);
                 } else if ("methods".equals(property)) {
-                    // 解析 `<dubbo:method />`
+                    // 解析 `<dubbo:method />`  标签的内容
+                    // 对应的配置类： org.apache.dubbo.config.MethodConfig。同时该标签为 service 或 reference 的子标签，用于控制到方法级。
+                    // 例如 ：
+                    // <dubbo:reference interface="com.xxx.XxxService">
+                    //   <dubbo:method name="findXxx" timeout="3000" retries="2" />
+                    //</dubbo:reference>
                     parseMethods(id, element.getChildNodes(), beanDefinition, parserContext);
                 } else if ("arguments".equals(property)) {
                     // 解析 `<dubbo:argument />`
+                    // 调用 #parseArguments(id, nodeList, beanDefinition, parserContext) 方法，解析 <dubbo:argument /> 标签，创建子 Bean 对象。
                     parseArguments(id, element.getChildNodes(), beanDefinition, parserContext);
                 } else {
                     String value = element.getAttribute(property);
@@ -245,7 +251,7 @@ public class DubboBeanDefinitionParser implements BeanDefinitionParser {
                                 parseMultiRef("protocols", value, beanDefinition, parserContext);
                             } else {
                                 Object reference;
-                                // 处理属性类型为基本属性的情况
+                                // 处理属性类型为基础属性( #isPrimitive(Class<?>) )的情况。
                                 if (isPrimitive(type)) {
                                     // 兼容性处理
                                     if ("async".equals(property) && "false".equals(value)
@@ -258,11 +264,15 @@ public class DubboBeanDefinitionParser implements BeanDefinitionParser {
                                         value = null;
                                     }
                                     reference = value;
-                                // 处理在 `<dubbo:provider />` 或者 `<dubbo:service />` 上定义了 `protocol` 属性的 兼容性。
-                                } else if ("protocol".equals(property)
-                                        && ExtensionLoader.getExtensionLoader(Protocol.class).hasExtension(value)
-                                        && (!parserContext.getRegistry().containsBeanDefinition(value)
-                                        || !ProtocolConfig.class.getName().equals(parserContext.getRegistry().getBeanDefinition(value).getBeanClassName()))) {
+                                    // 处理在 `<dubbo:provider />` 或者 `<dubbo:service />` 上定义了 `protocol` 属性的 兼容性。
+                                } else if ("protocol".equals(property) //todo 未理解
+                                        //如果带有 "protocol" 属性的标签先解析，先【第 221 至 223 行】直接创建 ProtocolConfig 对象并设置到 "protocol" 属性，
+                                        // 再【第 119 至 127 行】在 <dubbo:protocol /> 解析后，进行覆盖。这样，如果不存在 <dubbo:protocol /> 的情况，最多不进行覆盖呢。
+                                        //如果带有 "protocol" 属性的标签后解析，无需走上述流程，走【第 257 至 264 行】即可。
+                                        && ExtensionLoader.getExtensionLoader(Protocol.class).hasExtension(value) // 存在该注册协议的实现
+                                        && (!parserContext.getRegistry().containsBeanDefinition(value)  // Spring 注册表中不存在该 `<dubbo:provider />` 的定义
+                                        || !ProtocolConfig.class.getName().equals(parserContext.getRegistry().getBeanDefinition(value).getBeanClassName()))) { // Spring 注册表中存在该编号，但是类型不为 ProtocolConfig 。
+                                    // 目前，`<dubbo:provider protocol="" />` 推荐独立成 `<dubbo:protocol />`
                                     if ("dubbo:provider".equals(element.getTagName())) {
                                         logger.warn("Recommended replace <dubbo:provider protocol=\"" + value + "\" ... /> to <dubbo:protocol name=\"" + value + "\" ... />");
                                     }
@@ -315,6 +325,7 @@ public class DubboBeanDefinitionParser implements BeanDefinitionParser {
                 }
             }
         }
+        // 将 XML 元素未遍历到的属性，添加到 parameters 集合中
         NamedNodeMap attributes = element.getAttributes();
         int len = attributes.getLength();
         for (int i = 0; i < len; i++) {
@@ -329,6 +340,7 @@ public class DubboBeanDefinitionParser implements BeanDefinitionParser {
             }
         }
         if (parameters != null) {
+            //设置 Bean 的 parameters 。
             beanDefinition.getPropertyValues().addPropertyValue("parameters", parameters);
         }
         return beanDefinition;
@@ -341,9 +353,18 @@ public class DubboBeanDefinitionParser implements BeanDefinitionParser {
                 || cls == String.class || cls == Date.class || cls == Class.class;
     }
 
+    /**
+     * 解析多指向的情况，例如多注册中心、多协议、多服务提供者
+     *
+     * @param property       属性
+     * @param value          值
+     * @param beanDefinition 定义对象
+     * @param parserContext  Spring解析上下文
+     */
     @SuppressWarnings("unchecked")
     private static void parseMultiRef(String property, String value, RootBeanDefinition beanDefinition,
                                       ParserContext parserContext) {
+        // 以 , 拆分值字符串，创建 RuntimeBeanReference 数组。
         String[] values = value.split("\\s*[,]+\\s*");
         ManagedList list = null;
         for (int i = 0; i < values.length; i++) {
@@ -355,6 +376,7 @@ public class DubboBeanDefinitionParser implements BeanDefinitionParser {
                 list.add(new RuntimeBeanReference(v));
             }
         }
+        //设置 Bean 对象的指定属性值。
         beanDefinition.getPropertyValues().addPropertyValue(property, list);
     }
 
@@ -438,8 +460,9 @@ public class DubboBeanDefinitionParser implements BeanDefinitionParser {
 
     /**
      * 解析 <dubbo:service class="" /> 情况下，内涵的 `<property />` 的赋值。
-     * @param nodeList  子元素数组
-     * @param beanDefinition  定义对象
+     *
+     * @param nodeList       子元素数组
+     * @param beanDefinition 定义对象
      * @return
      */
     @SuppressWarnings("unchecked")
@@ -471,10 +494,11 @@ public class DubboBeanDefinitionParser implements BeanDefinitionParser {
 
     /**
      * 解析 `<dubbo:method />`
-     * @param id Bean的 `id` 属性
-     * @param nodeList  子元素节点数组
-     * @param beanDefinition  Bean定义对象
-     * @param parserContext 解析上下文
+     *
+     * @param id             Bean的 `id` 属性
+     * @param nodeList       子元素节点数组
+     * @param beanDefinition Bean定义对象
+     * @param parserContext  解析上下文
      */
     @SuppressWarnings("unchecked")
     private static void parseMethods(String id, NodeList nodeList, RootBeanDefinition beanDefinition,
@@ -485,6 +509,7 @@ public class DubboBeanDefinitionParser implements BeanDefinitionParser {
                 Node node = nodeList.item(i);
                 if (node instanceof Element) {
                     Element element = (Element) node;
+                    // 判断是否是 method 标签  只解析 <dubbo:method> 标签
                     if ("method".equals(node.getNodeName()) || "method".equals(node.getLocalName())) {
                         String methodName = element.getAttribute("name");
                         if (methodName == null || methodName.length() == 0) {
@@ -493,9 +518,13 @@ public class DubboBeanDefinitionParser implements BeanDefinitionParser {
                         if (methods == null) {
                             methods = new ManagedList();
                         }
+                        // 解析 `<dubbo:method />`，创建 BeanDefinition 对象
+                        // 调用 #parse(Element, ParserContext) 方法，主流程，解析 <dubbo:method> 标签，创建子 Bean 对象。
                         BeanDefinition methodBeanDefinition = parse(((Element) node),
                                 parserContext, MethodConfig.class, false);
+                        // 添加到 `methods` 中
                         String name = id + "." + methodName;
+                        // 设置创建的子 Bean 对象，指向父 Bean 对象。
                         BeanDefinitionHolder methodBeanDefinitionHolder = new BeanDefinitionHolder(
                                 methodBeanDefinition, name);
                         methods.add(methodBeanDefinitionHolder);
@@ -503,6 +532,7 @@ public class DubboBeanDefinitionParser implements BeanDefinitionParser {
                 }
             }
             if (methods != null) {
+                // 设置到 BeanDefinition 中
                 beanDefinition.getPropertyValues().addPropertyValue("methods", methods);
             }
         }
